@@ -51,6 +51,8 @@ import arviz as az  # type: ignore
 #
 # Read the data in a pandas DataFrame. Be sure  that the columns `Date` and `DateBorn` has dtype `pd.datetime64[ns]`.
 #
+df = pd.read_csv("rhinos.csv", parse_dates=["Date", "DateBorn"])
+df.dtypes
 
 pass
 
@@ -58,6 +60,8 @@ pass
 #
 # Add a column `Age` with the age in weeks of the rhinos at the time of the sighting.
 #
+df["Age"] = (df["Date"] - df["DateBorn"]).dt.days / 7
+df.head()
 
 pass
 
@@ -67,30 +71,91 @@ pass
 # For example, if the sightings are `["Horned", "Horned", "Dehorned"]`, the rhino was dehorned once; if the sightings are `["Dehorned", "Dehorned", "Dehorned"]` the rhino was dehorned once; if the sightings are `["Horned", "Horned", "Horned", "Horned"]` the rhino was never dehorned; if the sightings are `["Dehorned", "Horned", "Dehorned"]` the rhino was dehorned two times.
 #
 # To get the full marks, you should declare correctly the type hints and add a test within a doctest string.
+from typing import List
+
+def dehornings(sightings: List[str]) -> int:
+    """
+    Count how many times a rhino was dehorned.
+
+    >>> dehornings(["Horned", "Horned", "Dehorned"])
+    1
+    >>> dehornings(["Dehorned", "Dehorned", "Dehorned"])
+    1
+    >>> dehornings(["Horned", "Horned", "Horned"])
+    0
+    >>> dehornings(["Dehorned", "Horned", "Dehorned"])
+    2
+    """
+    count = 0
+    prev = "Horned"
+    for s in sightings:
+        if prev == "Horned" and s == "Dehorned":
+            count += 1
+        prev = s
+    return count
 
 pass
 
 # ### Exercise 4 (max 5 points)
 #
 # Apply the function defined in Exercise 3 to the data referring to the rhinos and find the rhino that was dehorned the most. Please note that you should order the list of sightings by `Date`.
+# ordiniamo per data
+df_sorted = df.sort_values("Date")
+
+# raggruppiamo per rhino
+dehorn_counts = (
+    df_sorted.groupby("RhinosAtSighting")["Horn"]
+    .apply(list)
+    .apply(dehornings)
+)
+
+# rhino più dehorned
+most_dehorned_rhino = dehorn_counts.idxmax()
+most_dehorned_count = dehorn_counts.max()
+
+most_dehorned_rhino, most_dehorned_count
 
 pass
 
 # ### Exercise 5 (max 2 points)
 #
 # Compute for each rhino the weeks between the first and the last sighting.
+weeks_span = (
+    df.groupby("RhinosAtSighting")["Date"]
+    .agg(lambda x: (x.max() - x.min()).days / 7)
+)
+weeks_span.head()
 
 pass
 
 # ### Exercise 6 (max 4 points)
 #
 # Plot a histogram of the number of rhinos observed in each reserve
+reserve_counts = df["Reserve"].value_counts()
+
+plt.figure()
+reserve_counts.plot(kind="hist")
+plt.xlabel("Number of rhinos observed")
+plt.ylabel("Frequency")
+plt.title("Histogram of rhinos per reserve")
+plt.show()
 
 pass
 
 # ### Exercise 7 (max 4 points)
 #
 # Plot together the histograms of the number of male and female rhinos observed in each reserve
+male_counts = df[df["Sex"] == "M"]["Reserve"].value_counts()
+female_counts = df[df["Sex"] == "F"]["Reserve"].value_counts()
+
+plt.figure()
+plt.hist(male_counts, alpha=0.5, label="Males")
+plt.hist(female_counts, alpha=0.5, label="Females")
+plt.legend()
+plt.xlabel("Number of rhinos observed")
+plt.ylabel("Frequency")
+plt.title("Male vs Female rhinos per reserve")
+plt.show()
 
 pass
 
@@ -108,5 +173,32 @@ pass
 #
 #
 #
+# numero rhinos per reserve
+N_rhinos = df.groupby("Reserve")["RhinosAtSighting"].nunique()
+
+# mean number of dehorned sightings per reserve
+mean_dehorned = (
+    df[df["Horn"] == "Dehorned"]
+    .groupby("Reserve")
+    .size()
+    .reindex(N_rhinos.index, fill_value=0)
+    / N_rhinos
+)
+
+N = N_rhinos.values
+Y = mean_dehorned.values
+with pm.Model() as model:
+    alpha = pm.Normal("alpha", mu=0, sigma=2)
+    beta = pm.Normal("beta", mu=0, sigma=2)
+    sigma = pm.Exponential("sigma", lam=1)
+
+    mu = alpha + beta * N
+
+    Y_obs = pm.Normal("Y_obs", mu=mu, sigma=sigma, observed=Y)
+
+    trace = pm.sample(2000, tune=1000, chains=2)
+  
+az.plot_posterior(trace)
+plt.show()
 
 pass
