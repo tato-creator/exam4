@@ -177,13 +177,7 @@ pass
 N_rhinos = df.groupby("Reserve")["RhinosAtSighting"].nunique()
 
 # mean number of dehorned sightings per reserve
-mean_dehorned = (
-    df[df["Horn"] == "Dehorned"]
-    .groupby("Reserve")
-    .size()
-    .reindex(N_rhinos.index, fill_value=0)
-    / N_rhinos
-)
+mean_dehorned = (df[df["Horn"] == "Dehorned"].groupby("Reserve").size().reindex(N_rhinos.index, fill_value=0)/ N_rhinos)
 
 N = N_rhinos.values
 Y = mean_dehorned.values
